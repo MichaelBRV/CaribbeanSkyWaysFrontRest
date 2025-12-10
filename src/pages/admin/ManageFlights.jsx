@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
-import { api } from "../../services/api.js";
+import {
+  getAllFlights,
+  createFlight,
+  updateFlight,
+  deleteFlight,
+} from "../../services/adminFlightsService";
+import { api } from "../../services/api";
 
-// ============ MODAL =============
+// ============ MODAL ============
 function Modal({ open, onClose, children }) {
   if (!open) return null;
-
   return (
     <div
       className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
@@ -23,7 +28,7 @@ function Modal({ open, onClose, children }) {
 
 export default function ManageFlights() {
   const [flights, setFlights] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [airports, setAirports] = useState([]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -34,40 +39,30 @@ export default function ManageFlights() {
     FlightNumber: "",
     OriginId: "",
     DestinationId: "",
-    OriginName: "",
-    DestinationName: "",
     DepartureTime: "",
     ArrivalTime: "",
-    Duration: "",
-    CabinClass: "",
-    AircraftId: "",
     Price: "",
     SeatsAvailable: "",
-    CancellationPolicy: "",
+    CabinClass: "Economy",
+    AircraftId: 1,
+    CancellationPolicy: "Reembolsable",
   });
 
-  // ============================
-  // 🔄 Cargar vuelos
-  // ============================
+  async function loadAirports() {
+    const data = await api.get("airports");
+    setAirports(data);
+  }
+
   async function loadFlights() {
-    try {
-      setLoading(true);
-      const data = await api.get("flights");
-      setFlights(data);
-    } catch (err) {
-      console.error("Error cargando vuelos:", err);
-    } finally {
-      setLoading(false);
-    }
+    const data = await getAllFlights();
+    setFlights(data);
   }
 
   useEffect(() => {
     loadFlights();
+    loadAirports();
   }, []);
 
-  // ============================
-  // ➕ Crear
-  // ============================
   const openCreate = () => {
     setForm({
       FlightId: 0,
@@ -75,85 +70,74 @@ export default function ManageFlights() {
       FlightNumber: "",
       OriginId: "",
       DestinationId: "",
-      OriginName: "",
-      DestinationName: "",
       DepartureTime: "",
       ArrivalTime: "",
-      Duration: "",
-      CabinClass: "",
-      AircraftId: "",
       Price: "",
       SeatsAvailable: "",
-      CancellationPolicy: "",
+      CabinClass: "Economy",
+      AircraftId: 1,
+      CancellationPolicy: "Reembolsable",
     });
     setEditMode(false);
     setModalOpen(true);
   };
 
-  // ============================
-  // ✏️ Editar
-  // ============================
-  const openEdit = (flight) => {
-    setForm(flight);
+  const openEdit = (f) => {
+    setForm(f);
     setEditMode(true);
     setModalOpen(true);
   };
 
-  // ============================
-  // ✍ Cambios del formulario
-  // ============================
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // ============================
-  // 💾 Guardar (create + edit)
-  // ============================
   const handleSave = async () => {
     try {
+      const payload = {
+        ...form,
+        Price: Number(form.Price),
+        SeatsAvailable: Number(form.SeatsAvailable),
+        OriginId: Number(form.OriginId),
+        DestinationId: Number(form.DestinationId),
+      };
+
       if (editMode) {
-        await api.put(`flights/${form.FlightId}`, form);
+        await updateFlight(form.FlightId, payload);
       } else {
-        await api.post("flights", form);
+        await createFlight(payload);
       }
 
       setModalOpen(false);
       loadFlights();
     } catch (err) {
-      console.error("Error guardando vuelo:", err);
-      alert("Error al guardar el vuelo");
+      console.error(err);
+      alert("Error al guardar vuelo");
     }
   };
 
-  // ============================
-  // 🗑 Eliminar
-  // ============================
   const handleDelete = async (id) => {
-    if (!confirm("¿Seguro deseas eliminar este vuelo?")) return;
+    if (!confirm("¿Eliminar vuelo?")) return;
 
     try {
-      await api.delete(`flights/${id}`);
+      await deleteFlight(id);
       loadFlights();
     } catch (err) {
-      console.error("Error eliminando vuelo:", err);
-      alert("No se pudo eliminar");
+      console.error(err);
+      alert("Error eliminando vuelo");
     }
   };
 
-  // ============================
-  // 🖥 Render
-  // ============================
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold">Gestionar Vuelos</h1>
+        <h1 className="text-3xl font-bold">Gestión de Vuelos</h1>
 
         <button
           onClick={openCreate}
           className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg"
         >
-          <Plus size={18} />
-          Nuevo vuelo
+          <Plus size={18} /> Nuevo vuelo
         </button>
       </div>
 
@@ -170,49 +154,32 @@ export default function ManageFlights() {
           </thead>
 
           <tbody>
-            {loading && (
-              <tr>
-                <td colSpan="5" className="p-6 text-center">
-                  Cargando vuelos...
+            {flights.map((f) => (
+              <tr key={f.FlightId} className="border-t">
+                <td className="p-3">{f.OriginName}</td>
+                <td className="p-3">{f.DestinationName}</td>
+                <td className="p-3">
+                  {new Date(f.DepartureTime).toLocaleString()}
+                </td>
+                <td className="p-3 font-bold text-blue-700">${f.Price}</td>
+
+                <td className="p-3 flex justify-center gap-3">
+                  <button
+                    onClick={() => openEdit(f)}
+                    className="p-2 bg-amber-100 text-amber-700 rounded"
+                  >
+                    <Pencil size={16} />
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(f.FlightId)}
+                    className="p-2 bg-red-100 text-red-600 rounded"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </td>
               </tr>
-            )}
-
-            {!loading && flights.length === 0 && (
-              <tr>
-                <td colSpan="5" className="p-6 text-center">
-                  No hay vuelos registrados
-                </td>
-              </tr>
-            )}
-
-            {!loading &&
-              flights.map((f) => (
-                <tr key={f.FlightId} className="border-t">
-                  <td className="p-3">{f.OriginName}</td>
-                  <td className="p-3">{f.DestinationName}</td>
-                  <td className="p-3">
-                    {new Date(f.DepartureTime).toLocaleString()}
-                  </td>
-                  <td className="p-3 font-bold text-blue-700">${f.Price}</td>
-
-                  <td className="p-3 flex justify-center gap-3">
-                    <button
-                      onClick={() => openEdit(f)}
-                      className="p-2 bg-amber-100 text-amber-700 rounded"
-                    >
-                      <Pencil size={16} />
-                    </button>
-
-                    <button
-                      onClick={() => handleDelete(f.FlightId)}
-                      className="p-2 bg-red-100 text-red-600 rounded"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+            ))}
           </tbody>
         </table>
       </div>
@@ -220,36 +187,45 @@ export default function ManageFlights() {
       {/* MODAL */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
         <h2 className="text-xl font-bold mb-4">
-          {editMode ? "Editar vuelo" : "Nuevo vuelo"}
+          {editMode ? "Editar Vuelo" : "Nuevo Vuelo"}
         </h2>
 
         <div className="grid grid-cols-2 gap-4">
-          <input
-            type="text"
-            name="OriginName"
-            placeholder="Origen"
-            value={form.OriginName}
-            onChange={handleChange}
-            className="border p-2 rounded"
-          />
 
-          <input
-            type="text"
-            name="DestinationName"
-            placeholder="Destino"
-            value={form.DestinationName}
+          {/* ORIGEN */}
+          <select
+            name="OriginId"
+            value={form.OriginId}
             onChange={handleChange}
             className="border p-2 rounded"
-          />
+          >
+            <option value="">Seleccionar origen</option>
+            {airports.map((a) => (
+              <option key={a.AirportId} value={a.AirportId}>
+                {a.City} ({a.IATA})
+              </option>
+            ))}
+          </select>
+
+          {/* DESTINO */}
+          <select
+            name="DestinationId"
+            value={form.DestinationId}
+            onChange={handleChange}
+            className="border p-2 rounded"
+          >
+            <option value="">Seleccionar destino</option>
+            {airports.map((a) => (
+              <option key={a.AirportId} value={a.AirportId}>
+                {a.City} ({a.IATA})
+              </option>
+            ))}
+          </select>
 
           <input
             type="datetime-local"
             name="DepartureTime"
-            value={
-              form.DepartureTime
-                ? form.DepartureTime.split(":").slice(0, 2).join(":")
-                : ""
-            }
+            value={form.DepartureTime?.substring(0, 16) || ""}
             onChange={handleChange}
             className="border p-2 rounded col-span-2"
           />
