@@ -2,10 +2,9 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useState, useMemo, useEffect } from "react";
 import { generateSeatMap } from "../data/seatMap";
-// import { getReservedSeats } from "../utils/seatStorage"; // ya no lo usamos
 import { createSeatHold } from "../services/seatHoldService";
 import { useAuth } from "../hooks/useAuth";
-import { api } from "../services/api";
+import { api, API_URL } from "../services/api";
 
 export default function SeatSelection() {
   const { state } = useLocation();
@@ -26,16 +25,14 @@ export default function SeatSelection() {
   }
 
   // ============================================================
-  // CONTROL DE VUELO Y PASAJERO
+  // CONTROL PRINCIPAL
   // ============================================================
   const [flightIndex, setFlightIndex] = useState(0);
   const [currentPassengerIndex, setCurrentPassengerIndex] = useState(0);
 
   const currentFlight = flights[flightIndex];
 
-  // ============================================================
-  // MAPA VISUAL DE ASIENTOS (SOLO LABELS: 1A, 1B, 1C...)
-  // ============================================================
+  // MAPA VISUAL — labels (ej: "12E")
   const allSeats = useMemo(() => generateSeatMap(), []);
 
   const seatsToShow =
@@ -46,30 +43,29 @@ export default function SeatSelection() {
   const minRow = Math.min(...seatsToShow.map((s) => s.row));
   const maxRow = Math.max(...seatsToShow.map((s) => s.row));
 
-  // seats[v][p] = label ("21E") para vuelo v y pasajero p
+  // selectedSeats[v][p] = label ("21E")
   const [selectedSeats, setSelectedSeats] = useState(
     flights.map(() => Array(passengerCount).fill(""))
   );
 
   // ============================================================
-  // MAPA DB: seatNumber → { seatId, available }
+  // MAPA DB seatNumber → { seatId, available }
   // ============================================================
   const [seatDbMap, setSeatDbMap] = useState({});
 
   useEffect(() => {
     async function loadSeats() {
       try {
-        console.log("✈️ currentFlight:", currentFlight);
+        const url = `seats/by-flight/${currentFlight.id}`;
 
-        const url = `/api/v1/seats/by-flight/${currentFlight.id}`;
-        console.log("🌐 URL FINAL:", api.baseURL + url);
+        console.log("🌐 URL FINAL →", `${API_URL}/${url}`);
 
-        const data = await api.get(url); // data = array de asientos
+        const data = await api.get(url); // <-- CORRECTO (NO duplicamos /api/v1)
+
         console.log("🎉 Asientos desde API:", data);
 
         const map = {};
         data.forEach((s) => {
-          // s.seatNumber es "1A", "1B", ...
           map[s.seatNumber] = {
             seatId: s.seatId,
             available: s.available,
@@ -79,12 +75,12 @@ export default function SeatSelection() {
         console.log("🗺️ seatDbMap construido:", map);
         setSeatDbMap(map);
       } catch (err) {
-        console.error("❌ Error cargando asientos desde API:", err);
+        console.error("❌ Error cargando asientos:", err);
       }
     }
 
     loadSeats();
-  }, [flightIndex, currentFlight, currentFlight.id]);
+  }, [flightIndex, currentFlight.id]);
 
   // ============================================================
   // SELECCIONAR ASIENTO
@@ -108,32 +104,24 @@ export default function SeatSelection() {
       return;
     }
 
-    // ⚠️ Verificamos que exista en el mapa de la BD
     const seatInfo = seatDbMap[seatLabel];
     if (!seatInfo) {
-      console.error(
-        "❌ No se encontró seatId en seatDbMap para label:",
-        seatLabel,
-        seatDbMap
-      );
-      alert(
-        `No se encontró el asiento ${seatLabel} en la base de datos. Prueba con otro asiento.`
-      );
+      alert(`El asiento ${seatLabel} no existe en la BD.`);
       return;
     }
 
     if (seatInfo.available === false) {
-      alert("Ese asiento ya está ocupado. Elige otro.");
+      alert("Ese asiento está ocupado. Elige otro.");
       return;
     }
 
-    // ➤ Siguiente pasajero
+    // Siguiente pasajero
     if (currentPassengerIndex < passengerCount - 1) {
       setCurrentPassengerIndex(currentPassengerIndex + 1);
       return;
     }
 
-    // ➤ Siguiente vuelo
+    // Siguiente vuelo
     if (flightIndex < flights.length - 1) {
       setFlightIndex(flightIndex + 1);
       setCurrentPassengerIndex(0);
@@ -141,30 +129,19 @@ export default function SeatSelection() {
     }
 
     // ============================================================
-    // ⭐ FINAL → CREAR TODOS LOS SEAT HOLD CON IDs REALES
+    // FINAL → CREAR SEAT HOLDS
     // ============================================================
     try {
       const createdHolds = [];
 
       for (let v = 0; v < flights.length; v++) {
         for (let p = 0; p < passengers.length; p++) {
-          const seatLabelLoop = selectedSeats[v][p];
-          const seatInfoLoop = seatDbMap[seatLabelLoop];
+          const label = selectedSeats[v][p];
+          const info = seatDbMap[label];
 
-          if (!seatInfoLoop) {
-            console.warn(
-              "⚠️ No hay seatInfo para",
-              seatLabelLoop,
-              "se salta ese asiento"
-            );
-            continue;
-          }
+          if (!info) continue;
 
-          const seatId = seatInfoLoop.seatId;
-
-          console.log(
-            `🔥 Creando SeatHold: user=${user.userId}, flight=${flights[v].id}, seatLabel=${seatLabelLoop}, seatId=${seatId}`
-          );
+          const seatId = info.seatId;
 
           const holdId = await createSeatHold({
             userId: user.userId,
@@ -174,7 +151,7 @@ export default function SeatSelection() {
 
           createdHolds.push({
             flightId: flights[v].id,
-            seat: seatLabelLoop,
+            seat: label,
             seatId,
             holdId,
             passenger: passengers[p].fullName,
@@ -186,20 +163,20 @@ export default function SeatSelection() {
         state: {
           flights,
           passengers,
-          selectedSeats, // labels
+          selectedSeats,
           cabin: selectedCabin,
           paymentMethod: "transferencia",
-          seatHolds: createdHolds, // con seatId y holdId
+          seatHolds: createdHolds,
         },
       });
     } catch (err) {
       console.error("❌ Error creando SeatHold:", err);
-      alert("Error creando la reserva temporal del asiento.");
+      alert("Error creando bloqueo temporal del asiento.");
     }
   };
 
   // ============================================================
-  // ESTILOS ASIENTOS
+  // ESTILOS DE ASIENTOS
   // ============================================================
   const getSeatClasses = (seat, isTaken, isSelected, usedByOther) => {
     let base =
@@ -248,15 +225,13 @@ export default function SeatSelection() {
               <div className="flex gap-2">
                 {left.map((seat) => {
                   const seatInfo = seatDbMap[seat.id];
-                  const isTakenDb = seatInfo && seatInfo.available === false;
+                  const isTaken = seatInfo && seatInfo.available === false;
 
                   const isSelected =
                     selectedSeats[flightIndex][currentPassengerIndex] === seat.id;
 
                   const usedByOther =
                     selectedSeats[flightIndex].includes(seat.id) && !isSelected;
-
-                  const isTaken = isTakenDb;
 
                   return (
                     <button
@@ -278,22 +253,19 @@ export default function SeatSelection() {
                 })}
               </div>
 
-              {/* PASILLO */}
               <div className="w-6" />
 
               {/* DERECHA */}
               <div className="flex gap-2">
                 {right.map((seat) => {
                   const seatInfo = seatDbMap[seat.id];
-                  const isTakenDb = seatInfo && seatInfo.available === false;
+                  const isTaken = seatInfo && seatInfo.available === false;
 
                   const isSelected =
                     selectedSeats[flightIndex][currentPassengerIndex] === seat.id;
 
                   const usedByOther =
                     selectedSeats[flightIndex].includes(seat.id) && !isSelected;
-
-                  const isTaken = isTakenDb;
 
                   return (
                     <button

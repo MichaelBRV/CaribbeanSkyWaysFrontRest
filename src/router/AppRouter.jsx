@@ -15,6 +15,7 @@ import MyFlightDetail from "../pages/MyFlightDetail";
 // Nuevos
 import SeatSelection from "../pages/SeatSelection";
 import PaymentCard from "../pages/PaymentCard";
+import PaymentTransfer from "../pages/payment-transfer";
 
 // Usuario
 import Dashboard from "../pages/Dashboard";
@@ -75,6 +76,14 @@ export default function AppRouter({ openAuthModal }) {
             element={
               <ProtectedRoute openAuthModal={openAuthModal}>
                 <PaymentCard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="payment-transfer"
+            element={
+              <ProtectedRoute openAuthModal={openAuthModal}>
+                <PaymentTransfer />
               </ProtectedRoute>
             }
           />
