@@ -1,3 +1,4 @@
+// src/pages/admin/ManageUsers.jsx
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 
@@ -40,10 +41,13 @@ export default function ManageUsers() {
     role: "user",
   });
 
+  // ======================================
+  // 🔄 Cargar usuarios
+  // ======================================
   const load = async () => {
     try {
       const data = await getUsers();
-      setUsers(data);
+      setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error cargando usuarios:", err);
       setUsers([]);
@@ -54,6 +58,9 @@ export default function ManageUsers() {
     load();
   }, []);
 
+  // ======================================
+  // ➕ Crear usuario
+  // ======================================
   const openCreate = () => {
     setForm({
       fullName: "",
@@ -65,18 +72,24 @@ export default function ManageUsers() {
     setModalOpen(true);
   };
 
+  // ======================================
+  // ✏️ Editar usuario
+  // ======================================
   const openEdit = (u) => {
     setForm({
       fullName: u.FullName,
       email: u.Email,
       password: "",
-      role: u.Role,
+      role: u.Role.toLowerCase(), // "User" → "user"
     });
     setEditingUser(u);
     setEditMode(true);
     setModalOpen(true);
   };
 
+  // ======================================
+  // 📌 Manejo de inputs
+  // ======================================
   const handleChange = (e) => {
     setForm({
       ...form,
@@ -84,6 +97,9 @@ export default function ManageUsers() {
     });
   };
 
+  // ======================================
+  // 💾 Guardar (crear / editar)
+  // ======================================
   const handleSave = async () => {
     try {
       if (!form.fullName || !form.email) {
@@ -113,6 +129,9 @@ export default function ManageUsers() {
     }
   };
 
+  // ======================================
+  // 🗑 Eliminar usuario
+  // ======================================
   const handleDelete = async (u) => {
     if (!confirm(`¿Eliminar usuario ${u.FullName}?`)) return;
 
@@ -124,6 +143,9 @@ export default function ManageUsers() {
     }
   };
 
+  // ======================================
+  // 🖥 Render
+  // ======================================
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
       <div className="flex items-center justify-between mb-8">
@@ -185,6 +207,7 @@ export default function ManageUsers() {
         </table>
       </div>
 
+      {/* MODAL */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
         <h2 className="text-xl font-bold mb-4">
           {editMode ? "Editar usuario" : "Nuevo usuario"}
@@ -206,8 +229,8 @@ export default function ManageUsers() {
             placeholder="Correo"
             value={form.email}
             onChange={handleChange}
-            className="border p-2 rounded col-span-2"
             disabled={editMode}
+            className="border p-2 rounded col-span-2"
           />
 
           {!editMode && (

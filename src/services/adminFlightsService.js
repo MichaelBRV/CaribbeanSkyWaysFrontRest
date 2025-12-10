@@ -1,21 +1,22 @@
+// src/services/adminFlightsService.js
 import { api } from "./api";
 
-// LISTAR
+// 🔹 Listar vuelos para administrador
 export function getAllFlights() {
-  return api.get("flights");
+  return api.get("admin/flights");
 }
 
-// CREAR
+// 🔹 Crear vuelo
 export function createFlight(data) {
-  return api.post("flights", data);
+  return api.post("admin/flights", data);
 }
 
-// EDITAR
-export function updateFlight(id, data) {
-  return api.put(`flights/${id}`, data);
+// 🔹 Actualizar vuelo
+export function updateFlight(flightId, data) {
+  return api.put(`admin/flights/${flightId}`, data);
 }
 
-// ELIMINAR
-export function deleteFlight(id) {
-  return api.delete(`flights/${id}`);
+// 🔹 Finalizar vuelo (en lugar de borrar duro)
+export function finalizeFlight(flightId) {
+  return api.put(`admin/flights/${flightId}/finalizar`);
 }
