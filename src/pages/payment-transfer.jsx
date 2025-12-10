@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { executeCheckout } from "../services/checkoutService";
 import { useAuth } from "../hooks/useAuth";
 
@@ -19,27 +19,57 @@ export default function PaymentTransfer() {
     return <div className="p-10 text-red-600">❌ Faltan datos para el pago.</div>;
   }
 
-  // Total del vuelo (ya funciona)
-  const total = flights.reduce((sum, f) => sum + (f.Price || 0), 0);
+  // --------------------------------------------
+  // 🔥 CÁLCULO SEGURO DEL TOTAL
+  // --------------------------------------------
+  const total = flights.reduce((sum, f) => {
+    const precio =
+      f.Price ??
+      f.price ??
+      f.FarePrice ??
+      f.farePrice ??
+      0;
 
+    return sum + Number(precio);
+  }, 0);
+
+  // --------------------------------------------
+  // 🔍 LOGS PARA DEPURAR
+  // --------------------------------------------
+  useEffect(() => {
+    console.log("🟦 Flights recibidos en PaymentTransfer.jsx:", flights);
+
+    flights.forEach((f, i) => {
+      console.log(`🟩 Vuelo ${i}:`, f);
+      console.log("   🔸 Price:", f.Price);
+      console.log("   🔸 price:", f.price);
+      console.log("   🔸 FarePrice:", f.FarePrice);
+      console.log("   🔸 farePrice:", f.farePrice);
+    });
+
+    console.log("🟧 Total calculado:", total);
+  }, [flights, total]);
+
+  // --------------------------------------------
+  // 🔥 PROCESAR PAGO
+  // --------------------------------------------
   const handlePay = async () => {
     try {
       const req = {
         UserId: user.userId,
 
-        FlightIds: flights.map(f => f.id),  // 🔥 tu backend usa "id"
+        FlightIds: flights.map(f => f.id ?? f.FlightId),  // usa el ID correcto
 
         Pasajeros: passengers.map(p => ({
           FullName: p.fullName,
           DocumentNumber: p.document,
           BirthDate: p.birthDate || "2000-01-01",
           Nationality: p.nationality || "EC",
-        })),
-
-        SeatHolds: seatHolds.map(h => ({
-          HoldId: h.holdId,
-          SeatId: h.seatId,
-          FlightId: h.flightId,
+          Seats: seatHolds.map(h => ({
+            HoldId: h.holdId,
+            SeatId: h.seatId,
+            FlightId: h.flightId,
+          }))
         })),
 
         Payment: {
@@ -49,9 +79,11 @@ export default function PaymentTransfer() {
         }
       };
 
-      console.log("🟦 Request Checkout corregida:", req);
+      console.log("🟦 Checkout Request ENVIADO:", req);
 
       const resp = await executeCheckout(req);
+
+      console.log("🟩 Checkout respuesta:", resp);
 
       navigate("/confirmation", {
         state: {
@@ -68,8 +100,6 @@ export default function PaymentTransfer() {
       alert("Error en pago: " + err?.message);
     }
   };
-
-  console.log("🚀 Vuelos recibidos en PaymentTransfer:", flights);
 
   return (
     <div className="max-w-3xl mx-auto py-10 space-y-6">
